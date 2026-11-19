@@ -164,6 +164,121 @@ for (let i = -4; i <= 4; i++) {
   }
 }
 
+
+// CINEMATIC WORLD DETAIL PASS — roads, street furniture, parked traffic and sky.
+const sky = new THREE.Mesh(
+  new THREE.SphereGeometry(460, 24, 16),
+  new THREE.ShaderMaterial({
+    side: THREE.BackSide,
+    depthWrite: false,
+    uniforms: {
+      topColor: { value: new THREE.Color(0x315b82) },
+      horizonColor: { value: new THREE.Color(0xd8b98d) }
+    },
+    vertexShader: `varying vec3 vWorldPosition;
+      void main() {
+        vec4 worldPosition = modelMatrix * vec4(position, 1.0);
+        vWorldPosition = worldPosition.xyz;
+        gl_Position = projectionMatrix * viewMatrix * worldPosition;
+      }`,
+    fragmentShader: `uniform vec3 topColor;
+      uniform vec3 horizonColor;
+      varying vec3 vWorldPosition;
+      void main() {
+        float h = normalize(vWorldPosition).y;
+        float blend = smoothstep(-0.08, 0.52, h);
+        vec3 color = mix(horizonColor, topColor, blend);
+        gl_FragColor = vec4(color, 1.0);
+      }`
+  })
+);
+sky.renderOrder = -10;
+scene.add(sky);
+
+const roadDashMat = new THREE.MeshStandardMaterial({ color: 0xe7dfc5, roughness: 0.85 });
+const lampMetal = mat(0x29343a, 0.55);
+const lampGlow = new THREE.MeshStandardMaterial({ color: 0xffe2a0, emissive: 0xffc45d, emissiveIntensity: 1.8 });
+const carPaints = [0x263e53, 0x8e3027, 0xb6b9b4, 0x252a2d, 0xc5a65d].map(c => new THREE.MeshStandardMaterial({ color: c, metalness: 0.42, roughness: 0.32 }));
+const rubber = mat(0x17191a, 0.98);
+const glass = new THREE.MeshStandardMaterial({ color: 0x253e4c, metalness: 0.25, roughness: 0.2 });
+
+function addStreetLamp(x, z, rot = 0) {
+  const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.075, 0.11, 5.5, 7), lampMetal);
+  pole.position.set(x, 2.75, z);
+  pole.castShadow = true;
+  scene.add(pole);
+  const arm = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.09, 0.09), lampMetal);
+  arm.position.set(x + Math.cos(rot) * 0.48, 5.35, z + Math.sin(rot) * 0.48);
+  arm.rotation.y = -rot;
+  scene.add(arm);
+  const bulb = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.13, 0.28), lampGlow);
+  bulb.position.set(x + Math.cos(rot) * 0.92, 5.27, z + Math.sin(rot) * 0.92);
+  scene.add(bulb);
+}
+function addParkedCar(x, z, rotation = 0, colorIndex = 0) {
+  const car = new THREE.Group();
+  const shell = new THREE.Mesh(new THREE.BoxGeometry(2.05, 0.72, 4.1), carPaints[colorIndex % carPaints.length]);
+  shell.position.y = 0.72;
+  shell.castShadow = true;
+  shell.receiveShadow = true;
+  car.add(shell);
+  const cabin = new THREE.Mesh(new THREE.BoxGeometry(1.62, 0.72, 2.0), glass);
+  cabin.position.set(0, 1.38, -0.12);
+  cabin.castShadow = true;
+  car.add(cabin);
+  for (const wx of [-1.04, 1.04]) {
+    for (const wz of [-1.35, 1.35]) {
+      const wheel = new THREE.Mesh(new THREE.CylinderGeometry(0.38, 0.38, 0.22, 12), rubber);
+      wheel.rotation.z = Math.PI / 2;
+      wheel.position.set(wx, 0.43, wz);
+      car.add(wheel);
+    }
+  }
+  const headlightMat = new THREE.MeshStandardMaterial({ color: 0xfff0c8, emissive: 0xffd98a, emissiveIntensity: 0.5 });
+  for (const lx of [-0.68, 0.68]) {
+    const light = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.2, 0.06), headlightMat);
+    light.position.set(lx, 0.82, 2.08);
+    car.add(light);
+  }
+  car.position.set(x, 0.08, z);
+  car.rotation.y = rotation;
+  scene.add(car);
+}
+function addRoadDash(x, z, horizontal) {
+  const dash = new THREE.Mesh(new THREE.BoxGeometry(horizontal ? 3.2 : 0.16, 0.025, horizontal ? 0.16 : 3.2), roadDashMat);
+  dash.position.set(x, 0.09, z);
+  scene.add(dash);
+}
+
+// Dashed lane markings replace the empty stretches of asphalt with readable road detail.
+for (let road = -2; road <= 2; road++) {
+  for (let p = -240; p <= 240; p += 12) {
+    addRoadDash(road * 42, p, false);
+    addRoadDash(p, road * 42, true);
+  }
+}
+// Lamps and a few parked vehicles give the streets a lived-in scale.
+for (let road = -2; road <= 2; road++) {
+  for (let p = -168; p <= 168; p += 42) {
+    addStreetLamp(road * 42 + 7.7, p + 8, 0);
+    addStreetLamp(p - 8, road * 42 - 7.7, Math.PI / 2);
+  }
+}
+const parked = [
+  [-7.8, 17, 0, 1], [7.8, -24, Math.PI, 2], [-49.8, 7, Math.PI / 2, 0],
+  [49.8, -33, -Math.PI / 2, 3], [91.8, 50, Math.PI / 2, 4],
+  [-91.8, -75, -Math.PI / 2, 1], [33.8, 91, 0, 2]
+];
+for (const [x, z, r, c] of parked) addParkedCar(x, z, r, c);
+
+// A warm low sun and soft ambient fill make the Kerala-inspired town feel less flat.
+const sunDisc = new THREE.Mesh(
+  new THREE.SphereGeometry(5.5, 20, 16),
+  new THREE.MeshBasicMaterial({ color: 0xffd9a1 })
+);
+sunDisc.position.set(-105, 72, -205);
+scene.add(sunDisc);
+
 // Player placeholder: original low-poly explorer character.
 const player = new THREE.Group();
 const body = new THREE.Mesh(new THREE.CapsuleGeometry(0.48, 0.9, 4, 8), mat(0x263b52));
