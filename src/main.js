@@ -33,11 +33,13 @@ sun.shadow.camera.bottom = -85;
 scene.add(sun);
 
 const mat = (color, roughness = 0.9) => new THREE.MeshStandardMaterial({ color, roughness });
-const grassMat = mat(0x657c58);
-const roadMat = mat(0x252b31);
+const grassMat = mat(0x557b4b);
+const roadMat = mat(0x303536);
 const sidewalkMat = mat(0x9a9b91);
 const lineMat = mat(0xe8d9a5);
-const buildingMats = [0x9b9c98, 0x777f85, 0xb0a18d, 0x687b83, 0xaaa69a].map(c => mat(c));
+const buildingMats = [0xd8c49a, 0xe3d7bd, 0xc6b58e, 0xb8c5a0, 0xd6bca0].map(c => mat(c));
+const roofMat = mat(0x8d3e2d);
+const waterMat = new THREE.MeshStandardMaterial({ color: 0x397f91, roughness: 0.24, metalness: 0.18 });
 const windowMat = new THREE.MeshStandardMaterial({ color: 0x9cc4d4, roughness: 0.28, metalness: 0.15 });
 
 function addBox(w, h, d, material, x, y, z, cast = true) {
@@ -68,13 +70,13 @@ for (let i = -2; i <= 2; i++) {
       for (let bz = 0; bz < 2; bz++) {
         const x = cx + (bx ? 1 : -1) * (12 + Math.random() * 4);
         const z = cz + (bz ? 1 : -1) * (12 + Math.random() * 4);
-        const w = 9 + Math.random() * 5;
-        const d = 9 + Math.random() * 5;
-        const h = 9 + Math.random() * 28;
+        const w = 8 + Math.random() * 3;
+        const d = 8 + Math.random() * 3;
+        const h = 4.2 + Math.random() * 5.5;
         const building = addBox(w, h, d, buildingMats[Math.floor(Math.random() * buildingMats.length)], x, h / 2, z);
         // A few broad window bands give the blocks some city detail.
         for (let level = 1; level < Math.floor(h / 4); level++) {
-          const strip = new THREE.Mesh(new THREE.BoxGeometry(w * 0.78, 0.65, 0.08), windowMat);
+          const strip = new THREE.Mesh(new THREE.BoxGeometry(w * 0.58, 0.38, 0.08), windowMat);
           strip.position.set(x, level * 3.2, z + d / 2 + 0.045);
           scene.add(strip);
         }
@@ -82,6 +84,66 @@ for (let i = -2; i <= 2; i++) {
       }
     }
   }
+}
+
+// Malappuram-inspired Kerala neighbourhood: tiled-roof homes, palms, river and green hills.
+const houseWallMats = [0xe5d8bd, 0xd8c8a7, 0xd8dfc9, 0xd6bca4].map(c => mat(c));
+for (let i = 0; i < 18; i++) {
+  const x = -82 + (i % 6) * 31 + (Math.random() - 0.5) * 8;
+  const z = -28 + Math.floor(i / 6) * 27 + (Math.random() - 0.5) * 7;
+  if (Math.abs(x) < 18 && Math.abs(z) < 18) continue;
+  const w = 7 + Math.random() * 2;
+  const d = 7 + Math.random() * 2;
+  const walls = addBox(w, 3.4, d, houseWallMats[i % houseWallMats.length], x, 1.7, z);
+  // Two sloping terracotta roof panels form a simple Kerala-style tiled roof.
+  const roofA = new THREE.Mesh(new THREE.BoxGeometry(w * 0.76, 0.28, d + 1.2), roofMat);
+  roofA.position.set(x - w * 0.22, 3.75, z);
+  roofA.rotation.z = -0.48;
+  roofA.castShadow = true; scene.add(roofA);
+  const roofB = new THREE.Mesh(new THREE.BoxGeometry(w * 0.76, 0.28, d + 1.2), roofMat);
+  roofB.position.set(x + w * 0.22, 3.75, z);
+  roofB.rotation.z = 0.48;
+  roofB.castShadow = true; scene.add(roofB);
+  addBox(1.2, 2.2, 0.12, mat(0x68452e), x, 1.1, z + d / 2 + 0.07, false);
+}
+
+// Backwater-like river ribbon at the edge of the playable town, with grassy banks.
+addBox(190, 0.22, 11, waterMat, 0, -0.12, -91, false);
+addBox(190, 0.28, 2.2, mat(0x78915b), 0, 0.02, -97.2, false);
+addBox(190, 0.28, 2.2, mat(0x78915b), 0, 0.02, -84.8, false);
+// Low-poly green hills on the distant horizon.
+const hillMat = mat(0x456c45);
+for (let i = 0; i < 13; i++) {
+  const hill = new THREE.Mesh(new THREE.IcosahedronGeometry(1, 2), hillMat);
+  hill.position.set(-125 + i * 21, -1.2, -132 - Math.random() * 12);
+  hill.scale.set(17 + Math.random() * 12, 11 + Math.random() * 9, 20 + Math.random() * 10);
+  hill.receiveShadow = true; scene.add(hill);
+}
+
+// Coconut palms with curved-looking fronds, kept lightweight for mobile.
+const palmTrunkMat = mat(0x765437);
+const palmLeafMat = mat(0x28633b);
+function addPalm(x, z, height = 8) {
+  const trunk = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.32, height, 7), palmTrunkMat);
+  trunk.position.set(x, height / 2, z);
+  trunk.rotation.z = (Math.random() - 0.5) * 0.13;
+  trunk.castShadow = true; scene.add(trunk);
+  const top = new THREE.Vector3(x, height, z);
+  for (let k = 0; k < 7; k++) {
+    const angle = (k / 7) * Math.PI * 2;
+    const end = new THREE.Vector3(x + Math.cos(angle) * 3.4, height - 1.15 + Math.sin(k * 2) * 0.35, z + Math.sin(angle) * 3.4);
+    const mid = top.clone().lerp(end, 0.52);
+    const leaf = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.12, mid.distanceTo(end) * 1.45, 5), palmLeafMat);
+    leaf.position.copy(mid).lerp(end, 0.35);
+    leaf.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), end.clone().sub(top).normalize());
+    leaf.castShadow = true; scene.add(leaf);
+  }
+}
+for (let i = 0; i < 34; i++) {
+  const x = -94 + Math.random() * 188;
+  const z = -78 + Math.random() * 155;
+  if (Math.abs(x) < 12 && Math.abs(z) < 12) continue;
+  addPalm(x, z, 7 + Math.random() * 3);
 }
 
 // Street trees: simple low-cost shapes.
